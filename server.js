@@ -17,7 +17,7 @@ const db = mysql.createConnection({
   user: 'root',
   password: 'hQEeGuNYwfelcUZXxKRgduRGAuFMVZjN', // Change this to your MySQL password
   database: 'nagajobs_db',
-  host: 13750
+  port: 13750
 });
 
 db.connect((err) => {
