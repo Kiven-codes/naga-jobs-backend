@@ -44,13 +44,13 @@ db.getConnection((err, connection) => {
 // Login
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body;
+  console.log('Login attempt:', email, password); // <- log incoming data
 
   const query = 'SELECT * FROM users WHERE email = ? AND password = ?';
   db.query(query, [email, password], (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
-    if (results.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    console.log('DB results:', results); // <- log what DB returns
+    if (results.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
     res.json(results[0]);
   });
 });
