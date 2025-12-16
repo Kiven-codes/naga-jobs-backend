@@ -1,132 +1,61 @@
-require('dotenv').config(); // To handle environment variables
+// server.js
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
-const bcrypt = require('bcrypt');
+const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// MySQL Connection using environment variables
+// MySQL Connection
 const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT
+  host: 'caboose.proxy.rlwy.net',
+  user: 'root',
+  password: 'hQEeGuNYwfelcUZXxKRgduRGAuFMVZjN', // Change this to your MySQL password
+  database: 'nagajobs_db',
+  host: 13750
 });
 
-// Handle MySQL connection error
 db.connect((err) => {
   if (err) {
-    console.error('Error connecting to MySQL:', err);
-    process.exit(1);  // Exit the process if DB connection fails
+    console.error('Database connection failed:', err);
+    return;
   }
   console.log('Connected to MySQL database');
 });
 
-// Routes
-
-// Get all jobs with company details
-app.get('/api/jobs', (req, res) => {
-  const query = `
-    SELECT j.*, c.company_name 
-    FROM jobs j
-    JOIN companies c ON j.company_id = c.company_id
-  `;
-  db.query(query, (err, results) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(results);
-  });
-});
-
-// Get all companies
-app.get('/api/companies', (req, res) => {
-  db.query('SELECT * FROM companies', (err, results) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(results);
-  });
-});
-
-// Register user
-app.post('/api/register', async (req, res) => {
-  const { email, password, role } = req.body;
-
-  if (!email || !password || !role) {
-    return res.status(400).json({ error: 'Email, password, and role are required.' });
-  }
-
-  try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    db.query(
-      'INSERT INTO users (email, pass, role) VALUES (?, ?, ?)',
-      [email, hashedPassword, role],
-      (err, result) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-        res.json({
-          message: 'User registered successfully',
-          userId: result.insertId
-        });
-      }
-    );
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// API Routes
 
 // Login
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body;
-
-  db.query(
-    'SELECT * FROM users WHERE email = ?',
-    [email],
-    async (err, results) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-
-      if (results.length === 0) {
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-
-      const user = results[0];
-      const validPassword = await bcrypt.compare(password, user.pass);
-
-      if (!validPassword) {
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-
-      res.json({
-        message: 'Login successful',
-        user: {
-          user_id: user.user_id,
-          email: user.email,
-          role: user.role
-        }
-      });
+  
+  const query = 'SELECT * FROM users WHERE email = ? AND password = ?';
+  db.query(query, [email, password], (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
     }
-  );
+    
+    if (results.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    res.json(results[0]);
+  });
 });
 
-// Get applicants
-app.get('/api/applicants', (req, res) => {
+// Get all jobs with company info
+app.get('/api/jobs', (req, res) => {
   const query = `
-    SELECT a.*, u.email 
-    FROM applicants a
-    JOIN users u ON a.user_id = u.user_id
+    SELECT j.*, c.company_name 
+    FROM jobs j 
+    JOIN companies c ON j.company_id = c.company_id
   `;
+  
   db.query(query, (err, results) => {
     if (err) {
       return res.status(500).json({ error: err.message });
@@ -135,47 +64,142 @@ app.get('/api/applicants', (req, res) => {
   });
 });
 
-// Submit application
-app.post('/api/applications', (req, res) => {
-  const { applicantId, jobId, status } = req.body;
-
-  if (!applicantId || !jobId) {
-    return res.status(400).json({ error: 'Applicant ID and Job ID are required.' });
-  }
-
-  db.query(
-    'INSERT INTO applications (applicant_id, job_id, application_id, status) VALUES (?, ?, UUID(), ?)',
-    [applicantId, jobId, status || 'pending'],
-    (err, result) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      res.json({
-        message: 'Application submitted successfully',
-        applicationId: result.insertId
-      });
-    }
-  );
-});
-
-// Get applications by user
+// Get applicant's applications
 app.get('/api/applications/:userId', (req, res) => {
+  const { userId } = req.params;
+  
   const query = `
-    SELECT ap.*, j.job_title, c.company_name
-    FROM applications ap
-    JOIN jobs j ON ap.job_id = j.job_id
+    SELECT app.*, j.job_title, c.company_name 
+    FROM applications app
+    JOIN applicants a ON app.applicant_id = a.applicant_id
+    JOIN jobs j ON app.job_id = j.job_id
     JOIN companies c ON j.company_id = c.company_id
-    WHERE ap.applicant_id = ?
+    WHERE a.user_id = ?
   `;
-  db.query(query, [req.params.userId], (err, results) => {
+  
+  db.query(query, [userId], (err, results) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
     res.json(results);
+  });
+});
+
+// Apply to a job
+app.post('/api/apply', (req, res) => {
+  const { job_id, user_id } = req.body;
+  
+  // Get applicant_id from user_id
+  const getApplicantQuery = 'SELECT applicant_id FROM applicants WHERE user_id = ?';
+  
+  db.query(getApplicantQuery, [user_id], (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'Applicant not found' });
+    }
+    
+    const applicant_id = results[0].applicant_id;
+    
+    // Insert application
+    const insertQuery = 'INSERT INTO applications (job_id, applicant_id, status) VALUES (?, ?, "Pending")';
+    
+    db.query(insertQuery, [job_id, applicant_id], (err, results) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ message: 'Application submitted successfully', id: results.insertId });
+    });
+  });
+});
+
+// Get company's jobs with applications
+app.get('/api/company-jobs/:userId', (req, res) => {
+  const { userId } = req.params;
+  
+  const query = `
+    SELECT j.*, 
+      JSON_ARRAYAGG(
+        JSON_OBJECT(
+          'application_id', app.application_id,
+          'full_name', a.full_name,
+          'skills', a.skills,
+          'status', app.status
+        )
+      ) as applications
+    FROM jobs j
+    JOIN companies c ON j.company_id = c.company_id
+    LEFT JOIN applications app ON j.job_id = app.job_id
+    LEFT JOIN applicants a ON app.applicant_id = a.applicant_id
+    WHERE c.user_id = ?
+    GROUP BY j.job_id
+  `;
+  
+  db.query(query, [userId], (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    // Parse JSON and filter out null applications
+    const jobs = results.map(job => ({
+      ...job,
+      applications: job.applications ? 
+        JSON.parse(job.applications).filter(app => app.application_id !== null) : 
+        []
+    }));
+    
+    res.json(jobs);
+  });
+});
+
+// Post a new job
+app.post('/api/jobs', (req, res) => {
+  const { user_id, job_title, required_skills, location } = req.body;
+  
+  // Get company_id from user_id
+  const getCompanyQuery = 'SELECT company_id FROM companies WHERE user_id = ?';
+  
+  db.query(getCompanyQuery, [user_id], (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    const company_id = results[0].company_id;
+    
+    // Insert job
+    const insertQuery = 'INSERT INTO jobs (company_id, job_title, required_skills, location) VALUES (?, ?, ?, ?)';
+    
+    db.query(insertQuery, [company_id, job_title, required_skills, location], (err, results) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({ message: 'Job posted successfully', id: results.insertId });
+    });
+  });
+});
+
+// Update application status
+app.put('/api/applications/:applicationId', (req, res) => {
+  const { applicationId } = req.params;
+  const { status } = req.body;
+  
+  const query = 'UPDATE applications SET status = ? WHERE application_id = ?';
+  
+  db.query(query, [status, applicationId], (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ message: 'Application status updated' });
   });
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
