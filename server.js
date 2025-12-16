@@ -34,8 +34,13 @@ db.getConnection((err, connection) => {
     return;
   }
   console.log('✅ Connected to MySQL database');
-  connection.release();
+  connection.query('SELECT * FROM users LIMIT 5', (err, results) => {
+    if (err) console.error('Query error:', err);
+    else console.log('Sample users:', results);
+    connection.release();
+  });
 });
+
 
 /* =======================
    API ROUTES
