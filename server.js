@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
@@ -26,6 +25,11 @@ db.connect((err) => {
     return;
   }
   console.log('Connected to MySQL database');
+});
+
+// Generate bcrypt hash for 'admin123' when server starts
+bcrypt.hash('admin123', 10).then((hashedPassword) => {
+  console.log('Hashed password for admin123:', hashedPassword);
 });
 
 // Routes
